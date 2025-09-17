@@ -1,9 +1,4 @@
 
----
-
-# 📊 SIEM Threat Detection Simulations  
-
-```markdown
 # SIEM Threat Detection Simulations 📊  
 
 ## Overview  
