@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dashboard>
+  <label>SIEM Operations Overview</label>
+  <description>High-level SOC situational awareness across simulated detections.</description>
+  <row>
+    <panel>
+      <title>Active Correlation Alerts</title>
+      <chart>
+        <search>
+          <query>| rest /servicesNS/-/-/alerts/fired_alerts | stats count by title severity</query>
+        </search>
+        <option name="charting.chart">pie</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Alert Timeline</title>
+      <chart>
+        <search>
+          <query>| rest /servicesNS/-/-/alerts/fired_alerts | timechart span=15m count by severity</query>
+        </search>
+        <option name="charting.chart">column</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>RDP Brute Force Sources</title>
+      <table>
+        <search>
+          <query>| savedsearch "RDP Brute Force Campaign" | stats values(src_ips) AS src_ips sum(failures) AS failures BY host</query>
+        </search>
+      </table>
+    </panel>
+    <panel>
+      <title>Crypto Mining Instances</title>
+      <table>
+        <search>
+          <query>| savedsearch "Crypto Mining on Fresh Instance" | table instanceid instancename src_ip duration_minutes</query>
+        </search>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>DNS Entropy Distribution</title>
+      <chart>
+        <search>
+          <query>index=telemetry sourcetype="network:dns" | bucket _time span=15m | stats avg(len(query)) AS avg_query_length BY _time</query>
+        </search>
+        <option name="charting.chart">line</option>
+      </chart>
+    </panel>
+  </row>
+</dashboard>
