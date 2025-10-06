@@ -1,0 +1,107 @@
+version: "3.9"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks: [siem]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    networks: [siem]
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.5
+    environment:
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+    networks: [siem]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=changeme
+      - xpack.security.http.ssl.enabled=false
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://elastic:changeme@localhost:9200"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+    networks: [siem]
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.3
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: changeme
+    ports:
+      - "5601:5601"
+    networks: [siem]
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.3
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      LS_JAVA_OPTS: "-Xmx1g -Xms1g"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/patterns:/usr/share/logstash/patterns
+    ports:
+      - "5044:5044"
+    networks: [siem]
+
+  splunk:
+    image: splunk/splunk:9.1.0
+    environment:
+      SPLUNK_START_ARGS: "--accept-license"
+      SPLUNK_PASSWORD: changeme
+      SPLUNK_HEC_TOKEN: 8f0a8e54-17ac-4aa3-9a22-51d474701234
+    ports:
+      - "8000:8000"
+      - "8088:8088"
+    volumes:
+      - splunk-var:/opt/splunk/var
+      - ./splunk:/opt/splunk/etc/apps/siem-bootstrap
+    networks: [siem]
+
+networks:
+  siem:
+    driver: bridge
+
+volumes:
+  splunk-var:
